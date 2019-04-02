@@ -52,16 +52,18 @@ def ms_to_time(ms):
 	hours = math.floor(ms / 1000 / 60 / 60)
 	return '%d:%02d:%02d' % (hours, minutes, seconds)
 
-def generate_ffmpeg_command(input, output, start_time, duration, id):
+def generate_ffmpeg_command(input, output, vcodec, start_time, duration, id, options):
+	options = options.split(' ')
 	return [
 		'ffmpeg',
 		'-ss', start_time,
 		'-i', input,
 		'-map', '0',
 		'-t', duration,
-		'-c:v', 'copy',
+		'-c:v', vcodec,
 		'-c:a', 'copy',
 		'-avoid_negative_ts', '1',
+		*options,
 		output % id
 	]
 
@@ -109,7 +111,9 @@ def validate_end_padding(ctx, param, value):
 @click.option('--padding', type=int, help='Number of seconds to include before and after the fight', callback=validate_padding)
 @click.option('--start_padding', type=int, help='Number of seconds to include before the fight', callback=validate_start_padding)
 @click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
-def main(input, report, output, api_key, fights, creation_time, modified_time, padding, start_padding, end_padding):
+@click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options')
+@click.option('--vcodec', type=str, help='ffmpeg video codec', default='copy', show_default=True)
+def main(input, report, output, api_key, fights, creation_time, modified_time, padding, start_padding, end_padding, ffmpeg_options, vcodec):
 	if not creation_time or not modified_time:
 		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
 	report_start_time, report_end_time = get_report_time(report)
@@ -136,7 +140,7 @@ def main(input, report, output, api_key, fights, creation_time, modified_time, p
 			})
 
 	commands = [
-		generate_ffmpeg_command(input, output, video['start_time'], video['duration'], video['id'])
+		generate_ffmpeg_command(input, output, vcodec, video['start_time'], video['duration'], video['id'], ffmpeg_options)
 		for video in video_bounds
 	]
 	print('Fetched data, starting video split')
