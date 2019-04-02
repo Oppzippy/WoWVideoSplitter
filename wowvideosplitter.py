@@ -8,6 +8,14 @@ import os
 import math
 import subprocess
 
+# Util
+def clamp(num, min, max):
+	if num < min:
+		return min
+	elif num > max:
+		return max
+	return num
+
 # WCL
 def get_report_time(report):
 	url = f'https://www.warcraftlogs.com/reports/{report}'
@@ -33,7 +41,7 @@ def get_report_fight_times(api_key, report, bosses_only=True):
 # Video file
 def get_creation_time(path):
 	if platform.system() == 'Windows':
-		return os.path.getctime(path)
+		return os.path.getctime(path), os.path.getmtime(path)
 	else:
 		raise Exception('Automatic file creation time is not available on operating systems other than Windows')
 
@@ -97,22 +105,36 @@ def validate_end_padding(ctx, param, value):
 @click.option('-k', '--api_key', type=str, help='WarcraftLogs API Key', required=True)
 @click.option('--fights', type=str, help='Whitelist of fights to export', callback=validate_fights)
 @click.option('--creation_time', type=int, help='Override file creation time')
+@click.option('--modified_time', type=int, help='Override file modified time')
 @click.option('--padding', type=int, help='Number of seconds to include before and after the fight', callback=validate_padding)
 @click.option('--start_padding', type=int, help='Number of seconds to include before the fight', callback=validate_start_padding)
 @click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
-def main(input, report, output, api_key, fights, creation_time, padding, start_padding, end_padding):
-	if not creation_time:
-		creation_time = get_creation_time(input) * 1000
+def main(input, report, output, api_key, fights, creation_time, modified_time, padding, start_padding, end_padding):
+	if not creation_time or not modified_time:
+		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
 	report_start_time, report_end_time = get_report_time(report)
-	fight_times = get_report_fight_times(api_key, report)
-	video_bounds = [
-		{
-			'start_time': ms_to_time(f['start_time'] + report_start_time - padding - start_padding - creation_time),
-			'end_time': ms_to_time(f['end_time'] + report_start_time + padding + end_padding - creation_time),
-			'duration': ms_to_time(f['end_time'] - f['start_time'] + padding * 2 + start_padding + end_padding),
-			'id': f['id']
-		} for f in fight_times if not fights or f['id'] in fights
-	]
+
+	# Filter fights if there is a whilteist
+	if fights:
+		fight_times = filter(lambda f: f['id'] in fights, get_report_fight_times(api_key, report))
+
+	video_bounds = []
+	for fight in fight_times:
+		start_time = fight['start_time'] + report_start_time - padding - start_padding
+		end_time = fight['end_time'] + report_start_time + padding + end_padding
+
+		start_time = clamp(start_time, creation_time, modified_time)
+		end_time = clamp(end_time, creation_time, modified_time)
+		duration = end_time - start_time + padding * 2 + start_padding + end_padding
+
+		if start_time < end_time and end_time <= modified_time:
+			video_bounds.append({
+				'start_time': ms_to_time(start_time - creation_time),
+				'end_time': ms_to_time(end_time - creation_time),
+				'duration': ms_to_time(duration),
+				'id': fight['id']
+			})
+
 	commands = [
 		generate_ffmpeg_command(input, output, video['start_time'], video['duration'], video['id'])
 		for video in video_bounds
