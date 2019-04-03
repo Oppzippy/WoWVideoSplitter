@@ -121,9 +121,10 @@ def main(input, report, output, api_key, fights,
 		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
 	report_start_time, report_end_time = get_report_time(report)
 
+	fight_times = get_report_fight_times(api_key, report)
 	# Filter fights if there is a whilteist
 	if fights:
-		fight_times = filter(lambda f: f['id'] in fights, get_report_fight_times(api_key, report))
+		fight_times = filter(lambda f: f['id'] in fights, fight_times)
 
 	video_bounds = []
 	for fight in fight_times:
