@@ -52,16 +52,16 @@ def ms_to_time(ms):
 	hours = math.floor(ms / 1000 / 60 / 60)
 	return '%d:%02d:%02d' % (hours, minutes, seconds)
 
-def generate_ffmpeg_command(input, output, vcodec, start_time, duration, id, options):
+def generate_ffmpeg_command(input, output, vcodec, start_time, duration, id, options, ffmpeg_map, acodec):
 	options = options.split(' ')
 	return [
 		'ffmpeg',
 		'-ss', start_time,
 		'-i', input,
-		'-map', '0',
+		'-map', ffmpeg_map,
 		'-t', duration,
 		'-c:v', vcodec,
-		'-c:a', 'copy',
+		'-c:a', acodec,
 		'-avoid_negative_ts', '1',
 		*options,
 		output % id
@@ -113,10 +113,12 @@ def validate_end_padding(ctx, param, value):
 @click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
 @click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options')
 @click.option('--vcodec', type=str, help='ffmpeg video codec', default='copy', show_default=True)
+@click.option('--acodec', type=str, help='ffmpeg audio codec', default='copy', show_default=True)
+@click.option('--ffmpeg_map', type=str, help='ffmpeg map', default='0', show_default=True)
 @click.option('--print', 'printCommands', flag_value=True, default=False, help="Print ffmpeg commands instead of running them")
 def main(input, report, output, api_key, fights,
 		creation_time, modified_time, padding, start_padding, end_padding,
-		ffmpeg_options, vcodec, printCommands):
+		ffmpeg_options, vcodec, acodec, ffmpeg_map, printCommands):
 	if not creation_time or not modified_time:
 		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
 	report_start_time, report_end_time = get_report_time(report)
@@ -144,7 +146,10 @@ def main(input, report, output, api_key, fights,
 			})
 
 	commands = [
-		generate_ffmpeg_command(input, output, vcodec, video['start_time'], video['duration'], video['id'], ffmpeg_options)
+		generate_ffmpeg_command(input, output,
+				vcodec, video['start_time'], video['duration'], video['id'],
+				ffmpeg_options, ffmpeg_map, acodec
+		)
 		for video in video_bounds
 	]
 	print('Fetched data, starting video split')
