@@ -113,7 +113,10 @@ def validate_end_padding(ctx, param, value):
 @click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
 @click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options')
 @click.option('--vcodec', type=str, help='ffmpeg video codec', default='copy', show_default=True)
-def main(input, report, output, api_key, fights, creation_time, modified_time, padding, start_padding, end_padding, ffmpeg_options, vcodec):
+@click.option('--print', 'printCommands', flag_value=True, default=False, help="Print ffmpeg commands instead of running them")
+def main(input, report, output, api_key, fights,
+		creation_time, modified_time, padding, start_padding, end_padding,
+		ffmpeg_options, vcodec, printCommands):
 	if not creation_time or not modified_time:
 		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
 	report_start_time, report_end_time = get_report_time(report)
@@ -145,7 +148,10 @@ def main(input, report, output, api_key, fights, creation_time, modified_time, p
 	]
 	print('Fetched data, starting video split')
 	for command in commands:
-		subprocess.call(command)
+		if printCommands:
+			print(' '.join(command))
+		else:
+			subprocess.call(command)
 	print('Finished')
 
 
