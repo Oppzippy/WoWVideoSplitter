@@ -59,11 +59,11 @@ def generate_ffmpeg_command(input, output, vcodec, start_time, duration, id, opt
 		'-ss', start_time,
 		'-i', input,
 		'-map', ffmpeg_map,
+		*options,
 		'-t', duration,
 		'-c:v', vcodec,
 		'-c:a', acodec,
 		'-avoid_negative_ts', '1',
-		*options,
 		output % id
 	]
 
