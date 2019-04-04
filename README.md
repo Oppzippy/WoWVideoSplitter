@@ -1,5 +1,7 @@
 # WoWVideoSplitter
 
+Splits video recordings of World of Warcraft raids into separate video files. Timing is determined by a WarcraftLogs report and the creation time of the video.
+
 * Options:  
   * -i, --input PATH         Video file input  [required]
   * -r, --report TEXT        WarcraftLogs report id  [required]
