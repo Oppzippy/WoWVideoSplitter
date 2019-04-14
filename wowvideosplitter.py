@@ -53,7 +53,7 @@ def ms_to_time(ms):
 	return '%d:%02d:%02d' % (hours, minutes, seconds)
 
 def generate_ffmpeg_command(input, output, vcodec, start_time, duration, id, options, ffmpeg_map, acodec):
-	options = options.split(' ')
+	options = options and options.split(' ') or []
 	return [
 		'ffmpeg',
 		'-ss', start_time,
