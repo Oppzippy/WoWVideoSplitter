@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
-import click
-import requests
 import re
 import platform
 import os
 import math
 import subprocess
+import click
+import requests
 
 # Util
-def clamp(num, min, max):
-	if num < min:
+def clamp(num, min_val, max_val):
+	if num < min_val:
 		return min
-	elif num > max:
+	if num > max_val:
 		return max
 	return num
 
@@ -42,29 +42,25 @@ def get_report_fight_times(api_key, report, bosses_only=True):
 def get_creation_time(path):
 	if platform.system() == 'Windows':
 		return os.path.getctime(path), os.path.getmtime(path)
-	else:
-		raise Exception('Automatic file creation time is not available on operating systems other than Windows')
+	raise Exception('Automatic file creation time is not available on operating systems other than Windows')
 
 # FFmpeg
 def ms_to_time(ms):
+	# pylint: disable=C0103
 	seconds = math.floor(ms / 1000) % 60
 	minutes = math.floor(ms / 1000 / 60) % 60
 	hours = math.floor(ms / 1000 / 60 / 60)
 	return '%d:%02d:%02d' % (hours, minutes, seconds)
 
-def generate_ffmpeg_command(input, output, vcodec, start_time, duration, id, options, ffmpeg_map, acodec):
-	options = options and options.split(' ') or []
+def generate_ffmpeg_command(input_file, output_file, start_time, duration, options):
 	return [
 		'ffmpeg',
 		'-ss', start_time,
-		'-i', input,
-		'-map', ffmpeg_map,
+		'-i', input_file,
 		*options,
 		'-t', duration,
-		'-c:v', vcodec,
-		'-c:a', acodec,
 		'-avoid_negative_ts', '1',
-		output % id
+		output_file
 	]
 
 # Argument validators
@@ -80,11 +76,10 @@ def validate_fights(ctx, param, value):
 		if start > end:
 			start, end = end, start
 		return range(start, end + 1)
-	elif list_match:
+	if list_match:
 		fights = [int(fight) for fight in list_match]
 		return fights
-	else:
-		raise click.BadParameter('Fights must be formated as 1-5 or 1,2,3,4,5')
+	raise click.BadParameter('Fights must be formated as 1-5 or 1,2,3,4,5')
 
 def validate_output(ctx, param, value):
 	if not re.search('%[0-9]*d', value):
@@ -100,6 +95,18 @@ def validate_start_padding(ctx, param, value):
 def validate_end_padding(ctx, param, value):
 	return (value or 10) * 1000 # Default is 10
 
+def validate_options(ctx, param, value):
+	options = value.split(' ') if value else []
+	if '-map' not in options:
+		options[:0] = '-map'
+		options[:1] = '0'
+	if '-vcodec' not in options and '-c:v' not in options:
+		options.append('-c:v')
+		options.append('copy')
+	if '-acodec' not in options and '-c:a' not in options:
+		options.append('-c:a')
+		options.append('copy')
+
 @click.command()
 @click.option('-i', '--input', type=click.Path(), help='Video file input', required=True)
 @click.option('-r', '--report', type=str, help='WarcraftLogs report id', required=True)
@@ -112,32 +119,27 @@ def validate_end_padding(ctx, param, value):
 @click.option('--start_padding', type=int, help='Number of seconds to include before the fight', callback=validate_start_padding)
 @click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
 @click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options')
-@click.option('--vcodec', type=str, help='ffmpeg video codec', default='copy', show_default=True)
-@click.option('--acodec', type=str, help='ffmpeg audio codec', default='copy', show_default=True)
-@click.option('--ffmpeg_map', type=str, help='ffmpeg map', default='0', show_default=True)
 @click.option('--print', 'printCommands', flag_value=True, default=False, help="Print ffmpeg commands instead of running them")
-def main(input, report, output, api_key, fights,
-		creation_time, modified_time, padding, start_padding, end_padding,
-		ffmpeg_options, vcodec, acodec, ffmpeg_map, printCommands):
-	if not creation_time or not modified_time:
+def main(**args):
+	if 'creation_time' not in args or 'modified_time' not in args:
 		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
-	report_start_time, report_end_time = get_report_time(report)
+	report_start_time = get_report_time(args['report'])
 
-	fight_times = get_report_fight_times(api_key, report)
+	fight_times = get_report_fight_times(args['api_key'], args['report'])
 	# Filter fights if there is a whilteist
-	if fights:
-		fight_times = filter(lambda f: f['id'] in fights, fight_times)
+	if 'fights' in args:
+		fight_times = filter(lambda f: f['id'] in args['fights'], fight_times)
 
 	video_bounds = []
 	for fight in fight_times:
-		start_time = fight['start_time'] + report_start_time - padding - start_padding
-		end_time = fight['end_time'] + report_start_time + padding + end_padding
+		start_time = fight['start_time'] + report_start_time - args['padding'] - args['start_padding']
+		end_time = fight['end_time'] + report_start_time + args['padding'] + args['end_padding']
 
 		start_time = clamp(start_time, creation_time, modified_time)
 		end_time = clamp(end_time, creation_time, modified_time)
-		duration = end_time - start_time + padding * 2 + start_padding + end_padding
+		duration = end_time - start_time + args['padding'] * 2 + args['start_padding'] + args['end_padding']
 
-		if start_time < end_time and end_time <= modified_time:
+		if start_time < end_time <= modified_time:
 			video_bounds.append({
 				'start_time': ms_to_time(start_time - creation_time),
 				'end_time': ms_to_time(end_time - creation_time),
@@ -145,16 +147,16 @@ def main(input, report, output, api_key, fights,
 				'id': fight['id']
 			})
 
+
 	commands = [
-		generate_ffmpeg_command(input, output,
-				vcodec, video['start_time'], video['duration'], video['id'],
-				ffmpeg_options, ffmpeg_map, acodec
+		generate_ffmpeg_command(input, args['output'] % video['id'],
+			video['start_time'], video['duration'], args['ffmpeg_options']
 		)
 		for video in video_bounds
 	]
 	print('Fetched data, starting video split')
 	for command in commands:
-		if printCommands:
+		if 'printCommands' in args:
 			print(' '.join(command))
 		else:
 			subprocess.call(command)
