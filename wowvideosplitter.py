@@ -98,14 +98,15 @@ def validate_end_padding(ctx, param, value):
 def validate_options(ctx, param, value):
 	options = value.split(' ') if value else []
 	if '-map' not in options:
-		options[:0] = '-map'
-		options[:1] = '0'
+		options.insert(0, '-map')
+		options.insert(1, '0')
 	if '-vcodec' not in options and '-c:v' not in options:
 		options.append('-c:v')
 		options.append('copy')
 	if '-acodec' not in options and '-c:a' not in options:
 		options.append('-c:a')
 		options.append('copy')
+	return options
 
 @click.command()
 @click.option('-i', '--input', type=click.Path(), help='Video file input', required=True)
@@ -118,16 +119,16 @@ def validate_options(ctx, param, value):
 @click.option('--padding', type=int, help='Number of seconds to include before and after the fight', callback=validate_padding)
 @click.option('--start_padding', type=int, help='Number of seconds to include before the fight', callback=validate_start_padding)
 @click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
-@click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options')
+@click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options', callback=validate_options)
 @click.option('--print', 'printCommands', flag_value=True, default=False, help="Print ffmpeg commands instead of running them")
 def main(**args):
-	if 'creation_time' not in args or 'modified_time' not in args:
-		creation_time, modified_time = tuple(i * 1000 for i in get_creation_time(input))
-	report_start_time = get_report_time(args['report'])
+	if args.get('creation_time') is None or args.get('modified_time') is None:
+		args['creation_time'], args['modified_time'] = tuple(i * 1000 for i in get_creation_time(args['input']))
+	report_start_time, _ = get_report_time(args['report'])
 
 	fight_times = get_report_fight_times(args['api_key'], args['report'])
 	# Filter fights if there is a whilteist
-	if 'fights' in args:
+	if args.get('fights') is not None:
 		fight_times = filter(lambda f: f['id'] in args['fights'], fight_times)
 
 	# Cut video into clips
@@ -136,20 +137,21 @@ def main(**args):
 		start_time = fight['start_time'] + report_start_time - args['padding'] - args['start_padding']
 		end_time = fight['end_time'] + report_start_time + args['padding'] + args['end_padding']
 
-		start_time = clamp(start_time, creation_time, modified_time)
-		end_time = clamp(end_time, creation_time, modified_time)
+		start_time = clamp(start_time, args['creation_time'], args['modified_time'])
+		end_time = clamp(end_time, args['creation_time'], args['modified_time'])
 		duration = end_time - start_time + args['padding'] * 2 + args['start_padding'] + args['end_padding']
 
-		if start_time < end_time <= modified_time:
+		if start_time < end_time <= args['modified_time']:
 			video_bounds.append({
-				'start_time': ms_to_time(start_time - creation_time),
-				'end_time': ms_to_time(end_time - creation_time),
+				'start_time': ms_to_time(start_time - args['creation_time']),
+				'end_time': ms_to_time(end_time - args['creation_time']),
 				'duration': ms_to_time(duration),
 				'id': fight['id']
 			})
 	# FFmpeg
+	print(args['ffmpeg_options'])
 	commands = [
-		generate_ffmpeg_command(input, args['output'] % video['id'],
+		generate_ffmpeg_command(args['input'], (args['output'] % video['id']),
 			video['start_time'], video['duration'], args['ffmpeg_options']
 		)
 		for video in video_bounds
