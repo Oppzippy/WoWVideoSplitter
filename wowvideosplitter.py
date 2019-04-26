@@ -130,6 +130,7 @@ def main(**args):
 	if 'fights' in args:
 		fight_times = filter(lambda f: f['id'] in args['fights'], fight_times)
 
+	# Cut video into clips
 	video_bounds = []
 	for fight in fight_times:
 		start_time = fight['start_time'] + report_start_time - args['padding'] - args['start_padding']
@@ -146,8 +147,7 @@ def main(**args):
 				'duration': ms_to_time(duration),
 				'id': fight['id']
 			})
-
-
+	# FFmpeg
 	commands = [
 		generate_ffmpeg_command(input, args['output'] % video['id'],
 			video['start_time'], video['duration'], args['ffmpeg_options']
