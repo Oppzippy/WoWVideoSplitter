@@ -14,8 +14,5 @@ Splits video recordings of World of Warcraft raids into separate video files. Ti
   * --start_padding INTEGER  Number of seconds to include before the fight
   * --end_padding INTEGER    Number of seconds to include after the fight
   * --ffmpeg_options TEXT    Custom ffmpeg options
-  * --vcodec TEXT            ffmpeg video codec  [default: copy]
-  * --acodec TEXT            ffmpeg audio codec  [default: copy]
-  * --ffmpeg_map TEXT        ffmpeg map  [default: 0]
   * --print                  Print ffmpeg commands instead of running them
   * --help                   Show this message and exit.
