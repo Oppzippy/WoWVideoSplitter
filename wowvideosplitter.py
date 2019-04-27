@@ -149,7 +149,6 @@ def main(**args):
 				'id': fight['id']
 			})
 	# FFmpeg
-	print(args['ffmpeg_options'])
 	commands = [
 		generate_ffmpeg_command(args['input'], (args['output'] % video['id']),
 			video['start_time'], video['duration'], args['ffmpeg_options']
