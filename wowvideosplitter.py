@@ -11,9 +11,9 @@ import requests
 # Util
 def clamp(num, min_val, max_val):
 	if num < min_val:
-		return min
+		return min_val
 	if num > max_val:
-		return max
+		return max_val
 	return num
 
 # WCL
