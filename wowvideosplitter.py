@@ -86,14 +86,11 @@ def validate_output(ctx, param, value):
 		raise click.BadParameter('Output file must contain %d, which will be the fight id')
 	return value
 
-def validate_padding(ctx, param, value):
-	return (value or 5) * 1000 # Default value is 5000
-
 def validate_start_padding(ctx, param, value):
-	return (value or 0) * 1000
+	return value * 1000
 
 def validate_end_padding(ctx, param, value):
-	return (value or 10) * 1000 # Default is 10
+	return value * 1000 # Default is 10
 
 def validate_options(ctx, param, value):
 	options = value.split(' ') if value else []
@@ -116,9 +113,8 @@ def validate_options(ctx, param, value):
 @click.option('--fights', type=str, help='Whitelist of fights to export', callback=validate_fights)
 @click.option('--creation_time', type=int, help='Override file creation time')
 @click.option('--modified_time', type=int, help='Override file modified time')
-@click.option('--padding', type=int, help='Number of seconds to include before and after the fight', callback=validate_padding)
-@click.option('--start_padding', type=int, help='Number of seconds to include before the fight', callback=validate_start_padding)
-@click.option('--end_padding', type=int, help='Number of seconds to include after the fight', callback=validate_end_padding)
+@click.option('--start_padding', type=int, default=5, help='Number of seconds to include before the fight', callback=validate_start_padding)
+@click.option('--end_padding', type=int, default=10, help='Number of seconds to include after the fight', callback=validate_end_padding)
 @click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options', callback=validate_options)
 @click.option('--print', 'printCommands', flag_value=True, default=False, help="Print ffmpeg commands instead of running them")
 def main(**args):
