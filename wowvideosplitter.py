@@ -34,7 +34,7 @@ def get_report_fight_times(api_key, report, bosses_only=True):
 			'start_time': f['start_time'],
 			'end_time': f['end_time'],
 			'id': f['id']
-		} for f in json['fights'] if not bosses_only or f['boss'] != 0
+		} for f in json['fights'] if not bosses_only or f.get('boss', 0) != 0
 	]
 	return fight_times
 
