@@ -135,7 +135,7 @@ def main(**args):
 
         start_time = clamp(start_time, args['creation_time'], args['modified_time'])
         end_time = clamp(end_time, args['creation_time'], args['modified_time'])
-        duration = end_time - start_time + args['start_padding'] + args['end_padding']
+        duration = end_time - start_time
 
         if start_time < end_time <= args['modified_time']:
             video_bounds.append({
