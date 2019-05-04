@@ -130,12 +130,12 @@ def main(**args):
     # Cut video into clips
     video_bounds = []
     for fight in fight_times:
-        start_time = fight['start_time'] + report_start_time - args['padding'] - args['start_padding']
-        end_time = fight['end_time'] + report_start_time + args['padding'] + args['end_padding']
+        start_time = fight['start_time'] + report_start_time - args['start_padding']
+        end_time = fight['end_time'] + report_start_time + args['end_padding']
 
         start_time = clamp(start_time, args['creation_time'], args['modified_time'])
         end_time = clamp(end_time, args['creation_time'], args['modified_time'])
-        duration = end_time - start_time + args['padding'] * 2 + args['start_padding'] + args['end_padding']
+        duration = end_time - start_time + args['start_padding'] + args['end_padding']
 
         if start_time < end_time <= args['modified_time']:
             video_bounds.append({
