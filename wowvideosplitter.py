@@ -153,7 +153,7 @@ def main(**args):
     ]
     print('Fetched data, starting video split')
     for command in commands:
-        if 'printCommands' in args:
+        if args.get('printCommands'):
             print(' '.join(command))
         else:
             subprocess.call(command)
