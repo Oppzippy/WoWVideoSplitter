@@ -44,8 +44,8 @@ more text
         '''
         httpretty.register_uri(httpretty.GET, 'https://www.warcraftlogs.com/v1/report/fights/report?api_key=key', body=response)
         report = WCLReport('key', 'report')
-        boss_fights = report.get_fight_times('key', 'report')
-        all_fights = report.get_fight_times('key', 'report', False)
+        boss_fights = report.get_fight_times()
+        all_fights = report.get_fight_times(bosses_only=False)
         self.assertEqual(boss_fights, [
             {
                 'id': 1,
