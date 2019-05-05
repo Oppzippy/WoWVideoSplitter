@@ -31,7 +31,7 @@ class WCLReport:
         end_match = re.search('^var end_time = ([0-9]+);$', text, re.MULTILINE)
         return int(start_match[1]), int(end_match[1])
 
-    def get_fight_times(self, api_key, report, bosses_only=True):
+    def get_fight_times(self, bosses_only=True):
         url = f'https://www.warcraftlogs.com/v1/report/fights/{self.report}?api_key={self.api_key}'
         response = requests.get(url)
         json = response.json()
