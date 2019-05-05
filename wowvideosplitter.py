@@ -17,51 +17,95 @@ def clamp(num, min_val, max_val):
     return num
 
 # WCL
-def get_report_time(report):
-    url = f'https://www.warcraftlogs.com/reports/{report}'
-    response = requests.get(url)
-    text = response.text
-    start_match = re.search('^var start_time = ([0-9]+);$', text, re.MULTILINE)
-    end_match = re.search('^var end_time = ([0-9]+);$', text, re.MULTILINE)
-    return int(start_match[1]), int(end_match[1])
+class WCLReport:
+    def __init__(self, api_key, report, fights=None):
+        self.api_key = api_key
+        self.report = report
+        self.fights = fights
 
-def get_report_fight_times(api_key, report, bosses_only=True):
-    url = f'https://www.warcraftlogs.com/v1/report/fights/{report}?api_key={api_key}'
-    response = requests.get(url)
-    json = response.json()
-    fight_times = [
-        {
-            'start_time': f['start_time'],
-            'end_time': f['end_time'],
-            'id': f['id']
-        } for f in json['fights'] if not bosses_only or f.get('boss', 0) != 0
-    ]
-    return fight_times
+    def get_time_bounds(self):
+        url = f'https://www.warcraftlogs.com/reports/{self.report}'
+        response = requests.get(url)
+        text = response.text
+        start_match = re.search('^var start_time = ([0-9]+);$', text, re.MULTILINE)
+        end_match = re.search('^var end_time = ([0-9]+);$', text, re.MULTILINE)
+        return int(start_match[1]), int(end_match[1])
+
+    def get_fight_times(self, api_key, report, bosses_only=True):
+        url = f'https://www.warcraftlogs.com/v1/report/fights/{self.report}?api_key={self.api_key}'
+        response = requests.get(url)
+        json = response.json()
+        fight_times = [
+            {
+                'start_time': f['start_time'],
+                'end_time': f['end_time'],
+                'id': f['id']
+            } for f in json['fights']
+            if (not self.fights or f['id'] in self.fights) and (not bosses_only or f.get('boss', 0) != 0)
+        ]
+        return fight_times
 
 # Video file
 def get_creation_time(path):
     if platform.system() == 'Windows':
-        return os.path.getctime(path), os.path.getmtime(path)
+        return os.path.getctime(path) * 1000, os.path.getmtime(path) * 1000
     raise Exception('Automatic file creation time is not available on operating systems other than Windows')
 
 # FFmpeg
-def ms_to_time(ms):
-    # pylint: disable=C0103
-    seconds = math.floor(ms / 1000) % 60
-    minutes = math.floor(ms / 1000 / 60) % 60
-    hours = math.floor(ms / 1000 / 60 / 60)
-    return '%d:%02d:%02d' % (hours, minutes, seconds)
+class VideoSplitter:
+    def __init__(self, report, input_file, output_file):
+        self.report = report
+        self.input_file = input_file
+        self.output_file = output_file
 
-def generate_ffmpeg_command(input_file, output_file, start_time, duration, options):
-    return [
-        'ffmpeg',
-        '-ss', start_time,
-        '-i', input_file,
-        *options,
-        '-t', duration,
-        '-avoid_negative_ts', '1',
-        output_file
-    ]
+    @classmethod
+    def ms_to_time(cls, ms):
+        # pylint: disable=C0103
+        seconds = math.floor(ms / 1000) % 60
+        minutes = math.floor(ms / 1000 / 60) % 60
+        hours = math.floor(ms / 1000 / 60 / 60)
+        return '%d:%02d:%02d' % (hours, minutes, seconds)
+
+    def generate_ffmpeg_command(self, video_id, start_time, duration, options):
+        return [
+            'ffmpeg',
+            '-ss', start_time,
+            '-i', self.input_file,
+            *options,
+            '-t', duration,
+            '-avoid_negative_ts', '1',
+            self.output_file % video_id
+        ]
+
+    def generate_ffmpeg_commands(self, clips, options):
+        commands = [
+            self.generate_ffmpeg_command(
+                video['id'], video['start_time'], video['duration'], options
+            )
+            for video in clips
+        ]
+        return commands
+
+    def split(self, creation_time, modified_time, start_padding, end_padding):
+        fight_times = self.report.get_fight_times()
+        report_start_time, _ = self.report.get_time_bounds()
+        clips = []
+        for fight in fight_times:
+            start_time = fight['start_time'] + report_start_time - start_padding
+            end_time = fight['end_time'] + report_start_time + end_padding
+
+            start_time = clamp(start_time, creation_time, modified_time)
+            end_time = clamp(end_time, creation_time, modified_time)
+            duration = end_time - start_time
+
+            if start_time < end_time <= modified_time:
+                clips.append({
+                    'start_time': self.ms_to_time(start_time - creation_time),
+                    'end_time': self.ms_to_time(end_time - creation_time),
+                    'duration': self.ms_to_time(duration),
+                    'id': fight['id']
+                })
+        return clips
 
 # Argument validators
 
@@ -116,48 +160,22 @@ def validate_options(ctx, param, value):
 @click.option('--start_padding', type=int, default=5, help='Number of seconds to include before the fight', callback=validate_start_padding)
 @click.option('--end_padding', type=int, default=10, help='Number of seconds to include after the fight', callback=validate_end_padding)
 @click.option('--ffmpeg_options', type=str, help='Custom ffmpeg options', callback=validate_options)
-@click.option('--print', 'printCommands', flag_value=True, default=False, help="Print ffmpeg commands instead of running them")
+@click.option('--print', 'printCommands', flag_value=True, default=False, help='Print ffmpeg commands instead of running them')
 def main(**args):
+    # Get creation time from OS if not specified
     if args.get('creation_time') is None or args.get('modified_time') is None:
-        args['creation_time'], args['modified_time'] = tuple(i * 1000 for i in get_creation_time(args['input']))
-    report_start_time, _ = get_report_time(args['report'])
+        args['creation_time'], args['modified_time'] = get_creation_time(args['input'])
 
-    fight_times = get_report_fight_times(args['api_key'], args['report'])
-    # Filter fights if there is a whilteist
-    if args.get('fights') is not None:
-        fight_times = filter(lambda f: f['id'] in args['fights'], fight_times)
+    report = WCLReport(args['api_key'], args['report'], args['fights'])
+    vsplitter = VideoSplitter(report, args['input'], args['output'])
+    clips = vsplitter.split(args['creation_time'], args['modified_time'], args['start_padding'], args['end_padding'])
+    commands = vsplitter.generate_ffmpeg_commands(clips, args['ffmpeg_options'])
 
-    # Cut video into clips
-    video_bounds = []
-    for fight in fight_times:
-        start_time = fight['start_time'] + report_start_time - args['start_padding']
-        end_time = fight['end_time'] + report_start_time + args['end_padding']
-
-        start_time = clamp(start_time, args['creation_time'], args['modified_time'])
-        end_time = clamp(end_time, args['creation_time'], args['modified_time'])
-        duration = end_time - start_time
-
-        if start_time < end_time <= args['modified_time']:
-            video_bounds.append({
-                'start_time': ms_to_time(start_time - args['creation_time']),
-                'end_time': ms_to_time(end_time - args['creation_time']),
-                'duration': ms_to_time(duration),
-                'id': fight['id']
-            })
-    # FFmpeg
-    commands = [
-        generate_ffmpeg_command(args['input'], (args['output'] % video['id']),
-            video['start_time'], video['duration'], args['ffmpeg_options']
-        )
-        for video in video_bounds
-    ]
-    print('Fetched data, starting video split')
-    for command in commands:
-        if args.get('printCommands'):
+    if args.get('printCommands'):
+        for command in commands:
             print(' '.join(command))
-        else:
-            subprocess.call(command)
-    print('Finished')
+    else:
+        subprocess.call(command)
 
 
 if __name__ == '__main__':

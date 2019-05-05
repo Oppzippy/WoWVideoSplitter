@@ -1,9 +1,9 @@
 import unittest
-from wowvideosplitter import ms_to_time, generate_ffmpeg_command
+from wowvideosplitter import VideoSplitter
 
 class TestFFmpeg(unittest.TestCase):
     def test_ms_to_time(self):
-        self.assertEqual(ms_to_time(0), '0:00:00')
-        self.assertEqual(ms_to_time(5000), '0:00:05')
-        self.assertEqual(ms_to_time(72000), '0:01:12')
-        self.assertEqual(ms_to_time(3601000), '1:00:01')
+        self.assertEqual(VideoSplitter.ms_to_time(0), '0:00:00')
+        self.assertEqual(VideoSplitter.ms_to_time(5000), '0:00:05')
+        self.assertEqual(VideoSplitter.ms_to_time(72000), '0:01:12')
+        self.assertEqual(VideoSplitter.ms_to_time(3601000), '1:00:01')

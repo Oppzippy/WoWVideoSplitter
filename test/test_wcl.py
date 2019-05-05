@@ -1,6 +1,6 @@
 import unittest
 import httpretty
-from wowvideosplitter import get_report_time, get_report_fight_times
+from wowvideosplitter import WCLReport
 
 class TestWCL(unittest.TestCase):
     @httpretty.activate
@@ -12,7 +12,8 @@ var end_time = 456;
 more text
         '''
         httpretty.register_uri(httpretty.GET, 'https://www.warcraftlogs.com/reports/test', body=response)
-        start_time, end_time = get_report_time('test')
+        report = WCLReport('key', 'test')
+        start_time, end_time = report.get_time_bounds()
         self.assertEqual(start_time, 123)
         self.assertEqual(end_time, 456)
 
@@ -42,8 +43,9 @@ more text
 }
         '''
         httpretty.register_uri(httpretty.GET, 'https://www.warcraftlogs.com/v1/report/fights/report?api_key=key', body=response)
-        boss_fights = get_report_fight_times('key', 'report')
-        all_fights = get_report_fight_times('key', 'report', False)
+        report = WCLReport('key', 'report')
+        boss_fights = report.get_fight_times('key', 'report')
+        all_fights = report.get_fight_times('key', 'report', False)
         self.assertEqual(boss_fights, [
             {
                 'id': 1,
